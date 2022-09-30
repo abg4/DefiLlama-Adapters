@@ -230,17 +230,17 @@ sdk.api.abi.call = async (...args) => {
     Object.entries(balances)
       .sort((a, b) => b[1] - a[1])
       .forEach(([symbol, balance]) => {
-        console.log(symbol.padEnd(25, " "), humanizeNumber(balance));
+        console.log(symbol.padEnd(25, " "), balance);
       });
-    console.log("Total:", humanizeNumber(usdTvls[chain]), "\n");
+    console.log("Total:", usdTvls[chain], "\n");
   });
   console.log(`------ TVL ------`);
   Object.entries(usdTvls).forEach(([chain, usdTvl]) => {
     if (chain !== "tvl") {
-      console.log(chain.padEnd(25, " "), humanizeNumber(usdTvl));
+      console.log(chain.padEnd(25, " "), usdTvl);
     }
   });
-  console.log("\ntotal".padEnd(25, " "), humanizeNumber(usdTvls.tvl), "\n");
+  console.log("\ntotal".padEnd(25, " "), usdTvls.tvl, "\n");
 
   process.exit(0);
 })();

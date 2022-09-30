@@ -18,48 +18,31 @@ const polygonLspCreators = [
   "0x5Fd7FFF20Ee851cD7bEE72fB3C6d324e4C104c9f",
   "0x4FbA8542080Ffb82a12E3b596125B1B02d213424",
 ];
-const bobaLspCreators = [
-  "0xC064b1FE8CE7138dA4C07BfCA1F8EEd922D41f68",
-];
-const ethEmpCreators = [
-  "0xad8fD1f418FB860A383c9D4647880af7f043Ef39",
-  "0x9A077D4fCf7B26a0514Baa4cff0B481e9c35CE87",
-  "0xddfC7E3B4531158acf4C7a5d2c3cB0eE81d018A5",
-];
+const bobaLspCreators = ["0xC064b1FE8CE7138dA4C07BfCA1F8EEd922D41f68"];
 
-// Captures TVL for EMP contracts on Ethereum
-async function ethEmp(timestamp, block) {
-  const balances = {};
-  for (let i = 0; i < ethEmpCreators.length; i++) {
-    const logs = await sdk.api.util.getLogs({
-      target: ethEmpCreators[i],
-      topic: "CreatedExpiringMultiParty(address,address)",
-      keys: ["topics"],
-      fromBlock: 9937650,
-      toBlock: block,
-    });
-    const collaterals = await sdk.api.abi.multiCall({
-      calls: logs.output.map((poolLog) => ({
-        target: `0x${poolLog[1].slice(26)}`,
-      })),
-      block,
-      abi: abi.collateralCurrency,
-    });
-    await requery(collaterals, "ethereum", block, abi);
-    await sumTokens(
-      balances,
-      collaterals.output
-        .filter((t) => t.output !== null)
-        .map((c) => [c.output, c.input.target]),
-      block
-    );
-  }
-  return balances;
-}
+const suTvlExpiration = "1664560800";
+
+// 1 hour prior
+// const ethBlock = 15647503;
+// const polygonBlock = 33761790;
+// const bobaBlock = 827861;
+
+// 2 hour prior
+const ethBlock = 15647205
+const polygonBlock = 33760084
+const bobaBlock = 827805
+
+// 3 hour prior
+// const ethBlock = 15646908
+// const polygonBlock = 33758360
+// const bobaBlock = 827731
+// const timestamp = "1664550000"
 
 // Captures TVL for LSP contracts on Ethereum
 async function ethLsp(timestamp, block) {
   const balances = {};
+
+  block = ethBlock;
   for (let i = 0; i < ethLspCreators.length; i++) {
     const logs = await sdk.api.util.getLogs({
       target: ethLspCreators[i],
@@ -68,9 +51,19 @@ async function ethLsp(timestamp, block) {
       fromBlock: 12736035,
       toBlock: block,
     });
-    const collaterals = await sdk.api.abi.multiCall({
+    const expirationTimestamp = await sdk.api.abi.multiCall({
       calls: logs.output.map((poolLog) => ({
         target: `0x${poolLog[1].slice(26)}`,
+      })),
+      block,
+      abi: abi.expirationTimestamp,
+    });
+    const filtered = expirationTimestamp.output.filter(
+      (t) => t.output > suTvlExpiration
+    );
+    const collaterals = await sdk.api.abi.multiCall({
+      calls: filtered.map((poolLog) => ({
+        target: poolLog.input.target,
       })),
       block,
       abi: abi.collateralToken,
@@ -90,33 +83,45 @@ async function ethLsp(timestamp, block) {
 // Captures TVL for LSP contracts on Polygon
 async function polygonLsp(timestamp, block, chainBlocks) {
   const balances = {};
-  const transform = await getChainTransform('polygon');
+  const chain = "polygon";
+  const transform = await getChainTransform("polygon");
   for (let i = 0; i < polygonLspCreators.length; i++) {
-    block = await getBlock(timestamp, "polygon", chainBlocks);
+    block = polygonBlock;
     const logs = await sdk.api.util.getLogs({
       target: polygonLspCreators[i],
       topic: "CreatedLongShortPair(address,address,address,address)",
       keys: ["topics"],
       fromBlock: 16241492,
       toBlock: block,
-      chain: "polygon",
+      chain: chain,
     });
-    const collaterals = await sdk.api.abi.multiCall({
+    const expirationTimestamp = await sdk.api.abi.multiCall({
       calls: logs.output.map((poolLog) => ({
         target: `0x${poolLog[1].slice(26)}`,
       })),
       block,
-      abi: abi.collateralToken,
-      chain: "polygon",
+      abi: abi.expirationTimestamp,
+      chain: chain,
     });
-    await requery(collaterals, "polygon", block, abi);
+    const filtered = expirationTimestamp.output.filter(
+      (t) => t.output > suTvlExpiration
+    );
+    const collaterals = await sdk.api.abi.multiCall({
+      calls: filtered.map((poolLog) => ({
+        target: poolLog.input.target,
+      })),
+      block,
+      abi: abi.collateralToken,
+      chain: chain,
+    });
+    await requery(collaterals, chain, block, abi);
     await sumTokens(
       balances,
       collaterals.output
         .filter((t) => t.output !== null)
         .map((c) => [c.output, c.input.target]),
       block,
-      "polygon",
+      chain,
       transform
     );
   }
@@ -131,7 +136,7 @@ async function bobaLsp(timestamp, block, chainBlocks) {
 
   for (let i = 0; i < bobaLspCreators.length; i++) {
     const lspCreatorAddress = bobaLspCreators[i];
-    block = await getBlock(timestamp, chain, chainBlocks);
+    block = bobaBlock;
     const logs = await sdk.api.util.getLogs({
       target: lspCreatorAddress,
       topic: "CreatedLongShortPair(address,address,address,address)",
@@ -140,16 +145,26 @@ async function bobaLsp(timestamp, block, chainBlocks) {
       toBlock: block,
       chain,
     });
-
-    const collaterals = await sdk.api.abi.multiCall({
+    const expirationTimestamp = await sdk.api.abi.multiCall({
       calls: logs.output.map((poolLog) => ({
         target: `0x${poolLog[1].slice(26)}`,
+      })),
+      block,
+      abi: abi.expirationTimestamp,
+      chain: chain,
+    });
+    const filtered = expirationTimestamp.output.filter(
+      (t) => t.output > suTvlExpiration
+    );
+    const collaterals = await sdk.api.abi.multiCall({
+      calls: filtered.map((poolLog) => ({
+        target: poolLog.input.target,
       })),
       block,
       abi: abi.collateralToken,
       chain,
     });
-    
+
     await requery(collaterals, chain, block, abi);
     await sumTokens(
       balances,
@@ -161,13 +176,12 @@ async function bobaLsp(timestamp, block, chainBlocks) {
       transform
     );
   }
-  
   return balances;
 }
 
 module.exports = {
   ethereum: {
-    tvl: sdk.util.sumChainTvls([ethEmp, ethLsp]),
+    tvl: sdk.util.sumChainTvls([ethLsp]),
   },
   polygon: {
     tvl: sdk.util.sumChainTvls([polygonLsp]),
